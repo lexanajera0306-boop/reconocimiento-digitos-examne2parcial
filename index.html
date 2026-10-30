@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reconocimiento de dígitos como problema de búsqueda</title>
+<style>
+:root{--bg:#eef1f4;--ink:#1b2430;--mut:#5b6775;--card:#fff;--ln:#c9d2dc;--acc:#d6336c;--vis:#3a7ca5;--opn:#f2b134;--ok:#2b9348}
+@media(prefers-color-scheme:dark){:root{--bg:#141a21;--ink:#e6ebf0;--mut:#9aa7b4;--card:#1d252e;--ln:#34414f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Trebuchet MS",system-ui,sans-serif;
+background-image:linear-gradient(var(--ln) 1px,transparent 1px),linear-gradient(90deg,var(--ln) 1px,transparent 1px);background-size:28px 28px;background-attachment:fixed}
+main{max-width:960px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:2rem;margin:.2em 0}h2{margin-top:1.8em;border-bottom:3px solid var(--acc);display:inline-block;padding-right:.6em}
+section{background:var(--card);border:1px solid var(--ln);border-radius:6px;padding:8px 20px 18px;margin:18px 0;overflow-wrap:anywhere}
+li{margin:.2em 0}table{border-collapse:collapse;font-size:.85rem;width:100%}td,th{border:1px solid var(--ln);padding:3px 6px;text-align:left}
+.sc{overflow-x:auto}code{background:var(--bg);padding:1px 4px;border-radius:3px}
+svg.g{width:100%;max-width:560px;display:block;margin:auto}
+.ed{stroke:var(--ln);stroke-width:1.5}.ed.q{stroke-dasharray:4 4;opacity:.6}.ed.p{stroke:var(--acc);stroke-width:4;opacity:1}
+.wl{font-size:10px;fill:var(--mut)}
+.nd circle{fill:var(--card);stroke:var(--ink);stroke-width:2}.nd text{font-size:15px;font-weight:700;fill:var(--ink);text-anchor:middle}
+.nd.open circle{fill:var(--opn)}.nd.closed circle{fill:var(--vis)}.nd.closed text{fill:#fff}.nd.cur circle{fill:var(--acc);stroke-width:4}.nd.cur text{fill:#fff}.nd.path circle{fill:var(--ok)}.nd.path text{fill:#fff}
+.nd .hv{font-size:9px;font-weight:400;fill:var(--mut)}
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}.row>*{flex:1 1 280px}
+button,select,input[type=file]{font:inherit;padding:6px 10px;margin:3px 0}button{background:var(--ink);color:var(--bg);border:0;border-radius:4px;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--acc)}
+#pv{width:140px;height:140px;image-rendering:pixelated;border:2px solid var(--ink);background:#fff}
+pre{background:var(--bg);padding:8px;font-size:.8rem;overflow-x:auto;white-space:pre-wrap}
+#res{font-size:1.4rem;font-weight:700}#grid{display:flex;flex-wrap:wrap;gap:8px}
+.t{width:64px;text-align:center;font-size:.75rem;cursor:pointer;border:2px solid var(--ln);border-radius:4px;padding:2px}.t canvas{width:56px;height:56px;image-rendering:pixelated}
+.t.ok{border-color:var(--ok)}.t.bad{border-color:var(--acc)}
+</style></head><body><main>
+<h1>Reconocimiento de dígitos como problema de búsqueda</h1>
+<p>Informe (secciones 1–3) y laboratorio interactivo (sección 4). Todo corre en el navegador, sin servidor.</p>
+
+<section><h2>Sección 1. Formulación como problema de búsqueda</h2>
+<ul>
+<li><b>a) Estado inicial:</b> la imagen binarizada de 28×28 (centrada y recortada a 20×20) con el nodo-hipótesis «?» (desconocido) y ningún rasgo confirmado.</li>
+<li><b>b) Estados:</b> pares (hipótesis, rasgos extraídos hasta el momento). Hipótesis ∈ {?, 0…9}; rasgos parciales: nº de huecos, simetrías V/H, extremos del esqueleto y densidades 3×3.</li>
+<li><b>c) Acciones:</b> binarizar, recortar/centrar, contar huecos (relleno del fondo), esqueletizar (Zhang-Suen), contar extremos, medir simetría, medir densidad por región; y la acción de búsqueda «pasar de la hipótesis a a la hipótesis b» (arista del grafo).</li>
+<li><b>d) Prueba de objetivo:</b> el nodo actual es un dígito d con distancia de rasgos h(d) ≤ τ. Si se agotan todos los nodos sin cumplirlo, el resultado es <i>null</i>.</li>
+<li><b>e) Costo:</b> g = suma de pesos de las aristas recorridas (1–10, menor = más similares); la calidad del ajuste es h(d), la distancia euclídea ponderada entre los rasgos medidos y los prototipos del dígito.</li>
+<li><b>f) Justificación:</b> hay estados, operadores, meta y costo, y se explora un espacio de hipótesis hasta hallar una que cumpla la meta, así que es búsqueda. BFS y DFS son <b>ciegas</b> (ignoran h); A* es <b>heurística</b> porque usa h(n) para ordenar la frontera.</li></ul></section>
+
+<section><h2>Sección 2. Grafo representativo</h2>
+<p>11 nodos: inicio «?» (rojo al explorar) y 10 nodos objetivo (dígitos). Las aristas «?»–dígito (punteadas) pesan 5: sin información previa todas las hipótesis cuestan igual. Entre dígitos, el peso (1–10) crece cuanto menos rasgos comparten.</p>
+<svg id="g0" class="g" viewBox="0 0 520 520" role="img" aria-label="Grafo de dígitos"></svg>
+<div class="sc"><table id="wt"><tr><th>Arista</th><th>Peso</th><th>Rasgos compartidos (justificación)</th></tr></table></div></section>
+
+<section><h2>Sección 3. Algoritmos</h2>
+<p><b>a) BFS/DFS (sin información extra).</b> BFS parte de «?», visita sus 10 vecinos en orden 0…9 y luego los vecinos de ellos, por niveles, con una cola FIFO. DFS usa una pila: baja por el primer vecino (0), luego sus vecinos, y retrocede al fallar. Ambos aplican la prueba h ≤ τ solo al sacar un nodo, así que devuelven el <i>primer</i> dígito aceptable en su orden de recorrido, no el mejor. No garantizan costo mínimo (BFS sí minimiza saltos).</p>
+<p><b>b) A*.</b> f(n) = g(n) + K·h(n), con K = 6. h(n) = distancia euclídea ponderada entre el vector de rasgos medido y el prototipo más cercano de n; sus rasgos son nº de huecos (peso 3), simetría V y H (1), extremos (1,5) y 9 densidades (1). Ejemplos: el 8 tiene 2 huecos y simetría alta; el 1 tiene 0 huecos y 2 extremos; el 4 tiene 3 extremos y un hueco o ninguno según la tipografía.<br>
+<b>Admisibilidad:</b> si los pesos cumplen w(a,b) ≥ K·d(p<sub>a</sub>,p<sub>b</sub>), la desigualdad triangular da K·(d(x,p<sub>n</sub>) − τ) ≤ costo real hasta cualquier meta, así que h es admisible. Con pesos asignados a mano y K = 6 esto se cumple solo de forma aproximada, por lo que debe verse como una heurística casi admisible; es una limitación a tener presente.</p>
+<p><b>c) Algoritmo genético.</b> <i>Cromosoma:</i> vector real de 14 genes = 13 pesos de rasgos (huecos, simetrías, extremos, 9 densidades) + el umbral τ. <i>Aptitud:</i> % de aciertos sobre un conjunto de entrenamiento (p. ej. 100 variaciones), con otro conjunto de validación aparte para evitar sobreajuste. <i>Selección:</i> torneo de 3, con elitismo de 2 individuos; población de 30. <i>Cruce:</i> BLX-α (α = 0,3) con probabilidad 0,8. <i>Mutación:</i> gaussiana (σ = 0,1) por gen con probabilidad 0,1, acotada a [0, 3]. <i>Parada:</i> 50 generaciones, o aptitud ≥ 98 %, o 10 generaciones sin mejora.</p></section>
+
+<section><h2>Sección 4. Laboratorio</h2>
+<div class="row"><div>
+<label>Imagen de un dígito (se reduce a 28×28): <input type="file" id="f" accept="image/*"></label><br>
+<label>Algoritmo: <select id="m"><option>A*</option><option>BFS</option><option>DFS</option></select></label>
+<label>τ = <span id="tv">0.9</span> <input type="range" id="tau" min="0.3" max="2" step="0.05" value="0.9"></label><br>
+<button id="rp">Repetir animación</button>
+<div id="res" aria-live="polite">—</div>
+<canvas id="pv" width="28" height="28"></canvas>
+<pre id="ft"></pre><pre id="lg"></pre></div>
+<div><svg id="g1" class="g" viewBox="0 0 520 520" role="img" aria-label="Recorrido de búsqueda"></svg>
+<p style="font-size:.85rem">Rojo: nodo actual · azul: visitados · amarillo: frontera · verde: camino final.</p></div></div>
+<h3>25 dígitos de prueba</h3>
+<button id="rt">Generar y evaluar de nuevo</button> <b id="acc"></b>
+<div id="grid"></div>
+<p style="font-size:.85rem">Variaciones: tipografía, grosor, rotación ±10°, desplazamiento y escala. Se añaden 2 casos «null» (imagen en blanco y ruido). Pulsa una miniatura para ver su recorrido. Los prototipos salen de 3 tipografías sin deformar.</p></section>
+</main>
+<script>
+const N=28,K=6,$=s=>document.querySelector(s),DIG=[0,1,2,3,4,5,6,7,8,9];
+const EDGES=[[0,8,3,"2 lazos cerrados, simetría V y H altas"],[0,6,4,"1 hueco, curva izquierda"],[0,9,4,"1 hueco, trazo cerrado superior"],[6,8,3,"hueco inferior compartido"],[8,9,3,"hueco superior compartido"],[6,9,3,"1 hueco; uno es el otro girado 180°"],[3,8,3,"curvas derechas, simetría H"],[3,5,4,"0 huecos, 2 extremos"],[5,6,3,"trazo superior y panza inferior"],[2,3,5,"0 huecos, curva superior"],[2,7,4,"trazo superior, diagonal inferior"],[1,7,2,"trazo casi vertical, 2 extremos"],[1,4,5,"tallo vertical"],[4,9,3,"tallo vertical y cierre superior"],[5,9,5,"panza y trazo superior"],[7,9,6,"trazo superior y tallo derecho"],[0,1,9,"casi sin rasgos comunes (hueco vs. línea)"],[1,8,10,"opuestos: 0 vs. 2 huecos y densidad"],[2,6,6,"curva inferior"],[3,9,5,"curva derecha superior"],[4,7,5,"diagonal y vertical, 2 extremos"]];
+const ADJ=Array.from({length:11},()=>[]);
+EDGES.forEach(([a,b,w])=>{ADJ[a].push([b,w]);ADJ[b].push([a,w])});
+DIG.forEach(d=>{ADJ[10].push([d,5]);ADJ[d].push([10,5])});
+const POS=DIG.map(i=>[260+200*Math.cos((-90+36*i)*Math.PI/180),260+200*Math.sin((-90+36*i)*Math.PI/180)]);POS[10]=[260,260];
+const ek=(a,b)=>Math.min(a,b)+"-"+Math.max(a,b);
+function drawGraph(svg,labels){
+ let s="";
+ ADJ.forEach((l,a)=>l.forEach(([b,w])=>{if(a<b){const[x1,y1]=POS[a],[x2,y2]=POS[b];
+  s+=`<line class="ed ${b==10||a==10?"q":""}" data-k="${ek(a,b)}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  if(a!=10&&b!=10)s+=`<text class="wl" x="${(x1*0.6+x2*0.4)}" y="${(y1*0.6+y2*0.4)}">${w}</text>`}}));
+ for(let i=0;i<11;i++)s+=`<g class="nd" data-i="${i}"><circle cx="${POS[i][0]}" cy="${POS[i][1]}" r="20"/><text x="${POS[i][0]}" y="${POS[i][1]+5}">${i<10?i:"?"}</text>${labels&&i<10?`<text class="hv" x="${POS[i][0]}" y="${POS[i][1]+34}"></text>`:""}</g>`;
+ svg.innerHTML=s}
+drawGraph($("#g0"));drawGraph($("#g1"),1);
+EDGES.forEach(([a,b,w,j])=>$("#wt").insertAdjacentHTML("beforeend",`<tr><td>${a}–${b}</td><td>${w}</td><td>${j}</td></tr>`));
+$("#wt").insertAdjacentHTML("beforeend","<tr><td>?–d (d = 0…9)</td><td>5</td><td>Sin información previa: todas las hipótesis cuestan igual</td></tr>");
+
+/* ---------- procesamiento de imagen y rasgos ---------- */
+const binarize=g=>{const m=g.reduce((a,v)=>a+v,0)/g.length,inv=m>127;return g.map(v=>(inv?v<128:v>128)?1:0)};
+function norm(b){
+ let x0=N,y0=N,x1=-1,y1=-1;
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(b[y*N+x]){x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}
+ if(x1<0)return b;
+ const w=x1-x0+1,h=y1-y0+1,s=20/Math.max(w,h),src=document.createElement("canvas");src.width=src.height=N;
+ const c=src.getContext("2d"),id=c.createImageData(N,N);
+ b.forEach((v,i)=>{id.data[i*4+3]=v?255:0});c.putImageData(id,0,0);
+ const dst=document.createElement("canvas");dst.width=dst.height=N;const d=dst.getContext("2d");
+ d.drawImage(src,x0,y0,w,h,(N-w*s)/2,(N-h*s)/2,w*s,h*s);
+ const o=d.getImageData(0,0,N,N).data;return Array.from({length:N*N},(_,i)=>o[i*4+3]>100?1:0)}
+function holes(b){
+ const seen=new Uint8Array(N*N);let n=0;
+ const fl=(sx,sy)=>{const st=[[sx,sy]];let c=0;seen[sy*N+sx]=1;
+  while(st.length){const[x,y]=st.pop();c++;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const X=x+dx,Y=y+dy;
+   if(X<0||Y<0||X>=N||Y>=N||seen[Y*N+X]||b[Y*N+X])continue;seen[Y*N+X]=1;st.push([X,Y])}}return c};
+ for(let i=0;i<N;i++)for(const[x,y]of[[i,0],[i,N-1],[0,i],[N-1,i]])if(!b[y*N+x]&&!seen[y*N+x])fl(x,y);
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(!b[y*N+x]&&!seen[y*N+x]&&fl(x,y)>=4)n++;
+ return n}
+function skel(b){
+ const a=b.slice(),g=(x,y)=>(x<0||y<0||x>=N||y>=N)?0:a[y*N+x];let ch=true;
+ while(ch){ch=false;for(let s=0;s<2;s++){const del=[];
+  for(let y=1;y<N-1;y++)for(let x=1;x<N-1;x++){if(!a[y*N+x])continue;
+   const p=[g(x,y-1),g(x+1,y-1),g(x+1,y),g(x+1,y+1),g(x,y+1),g(x-1,y+1),g(x-1,y),g(x-1,y-1)];
+   const B=p.reduce((u,v)=>u+v,0);if(B<2||B>6)continue;
+   let A=0;for(let i=0;i<8;i++)if(!p[i]&&p[(i+1)%8])A++;if(A!==1)continue;
+   if(s==0){if(p[0]*p[2]*p[4]||p[2]*p[4]*p[6])continue}else{if(p[0]*p[2]*p[6]||p[0]*p[4]*p[6])continue}
+   del.push(y*N+x)}
+  del.forEach(i=>a[i]=0);if(del.length)ch=true}}
+ return a}
+function feats(b){
+ const sk=skel(b),eps=[];
+ for(let y=1;y<N-1;y++)for(let x=1;x<N-1;x++)if(sk[y*N+x]){let c=0;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if((dx||dy)&&sk[(y+dy)*N+x+dx])c++;if(c==1)eps.push([x,y])}
+ const sym=f=>{let i=0,u=0;for(let y=0;y<N;y++)for(let x=0;x<N;x++){const a=b[y*N+x],m=b[f(x,y)];if(a&&m)i++;if(a||m)u++}return u?i/u:0};
+ const E=[4,11,17,24],tot=b.reduce((a,v)=>a+v,0),d=[];
+ for(let r=0;r<3;r++)for(let c=0;c<3;c++){let n=0;for(let y=E[r];y<E[r+1];y++)for(let x=E[c];x<E[c+1];x++)n+=b[y*N+x];d.push(n/tot)}
+ return{h:holes(b),sv:sym((x,y)=>y*N+N-1-x),sh:sym((x,y)=>(N-1-y)*N+x),e:eps.length,d,eps,sk}}
+const W=[3,1,1,1.5,1,1,1,1,1,1,1,1,1];
+const vec=f=>[Math.min(f.h,2)/2,f.sv,f.sh,Math.min(f.e,4)/4,...f.d.map(x=>3*x)];
+const dist=(a,b)=>Math.sqrt(a.reduce((s,v,i)=>s+W[i]*(v-b[i])**2,0));
+const grayOf=c=>{const o=c.getContext("2d").getImageData(0,0,N,N).data;return Array.from({length:N*N},(_,i)=>(o[i*4]+o[i*4+1]+o[i*4+2])/3)};
+function render(d,font,bold,rot,dx,dy,sc){
+ const c=document.createElement("canvas");c.width=c.height=N;const x=c.getContext("2d");
+ x.fillStyle="#fff";x.fillRect(0,0,N,N);
+ if(d!==null){x.fillStyle="#000";x.font=`${bold?"bold ":""}${Math.round(22*sc)}px "${font}", sans-serif`;x.textAlign="center";x.textBaseline="middle";
+  x.translate(14+dx,14+dy);x.rotate(rot*Math.PI/180);x.fillText(String(d),0,0)}
+ return c}
+const PROT=DIG.map(d=>["Arial","Times New Roman","Courier New"].flatMap(f=>[0,1].map(bd=>{
+ const b=norm(binarize(grayOf(render(d,f,bd,0,0,0,1))));return vec(feats(b))})));
+
+/* ---------- búsqueda ---------- */
+function search(mode,hv,tau){
+ const steps=[],par={},g={10:0};let open=[10];const closed=new Set();
+ const f=n=>g[n]+(n<10?K*hv[n]:0);
+ while(open.length){
+  let n;if(mode=="A*"){open.sort((a,b)=>f(a)-f(b));n=open.shift()}else if(mode=="BFS")n=open.shift();else n=open.pop();
+  if(closed.has(n))continue;closed.add(n);
+  const ok=n<10&&hv[n]<=tau;
+  steps.push({cur:n,open:[...open],closed:[...closed],ok});
+  if(ok){const p=[];for(let x=n;x!==undefined;x=par[x])p.unshift(x);return{steps,path:p,res:n}}
+  const nb=ADJ[n].filter(([m])=>!closed.has(m));if(mode=="DFS")nb.reverse();
+  for(const[m,w]of nb){const ng=g[n]+w;
+   if(mode=="A*"){if(g[m]===undefined||ng<g[m]){g[m]=ng;par[m]=n}if(!open.includes(m))open.push(m)}
+   else if(g[m]===undefined){g[m]=ng;par[m]=n;open.push(m)}}}
+ return{steps,path:[],res:null}}
+
+/* ---------- interfaz ---------- */
+const svg=$("#g1");let last=null,timer=null;
+function paint(i,path){
+ svg.querySelectorAll(".nd").forEach(e=>{e.setAttribute("class","nd")});
+ svg.querySelectorAll(".ed").forEach(e=>e.classList.remove("p"));
+ const s=last.steps[i],set=(n,c)=>svg.querySelector(`.nd[data-i="${n}"]`).setAttribute("class","nd "+c);
+ s.open.forEach(n=>set(n,"open"));s.closed.forEach(n=>set(n,"closed"));set(s.cur,"cur");
+ if(path)for(let k=0;k<last.path.length;k++){set(last.path[k],"path");if(k)svg.querySelector(`.ed[data-k="${ek(last.path[k-1],last.path[k])}"]`).classList.add("p")}}
+function play(){
+ clearInterval(timer);let i=0;$("#lg").textContent="";
+ const tick=()=>{const s=last.steps[i],hv=last.hv;
+  $("#lg").textContent+=`Paso ${i+1}: nodo ${s.cur<10?s.cur:"?"}`+(s.cur<10?` · h=${hv[s.cur].toFixed(2)} ${s.ok?"≤":">"} τ`:" (inicio)")+"\n";
+  paint(i,false);
+  if(i==last.steps.length-1){clearInterval(timer);paint(i,last.res!==null);
+   $("#res").textContent=last.res!==null?`Dígito: ${last.res}`:"Resultado: null (desconocido)"}
+  i++};
+ tick();timer=setInterval(tick,600)}
+function analyze(gray){
+ const b=norm(binarize(gray)),ink=b.reduce((a,v)=>a+v,0),tau=+$("#tau").value;
+ const pc=$("#pv").getContext("2d");pc.fillStyle="#fff";pc.fillRect(0,0,N,N);
+ let hv=DIG.map(()=>9);
+ if(ink>=12){const f=feats(b);
+  b.forEach((v,i)=>{if(v){pc.fillStyle="#bbb";pc.fillRect(i%N,i/N|0,1,1)}});
+  f.sk.forEach((v,i)=>{if(v){pc.fillStyle="#3a7ca5";pc.fillRect(i%N,i/N|0,1,1)}});
+  f.eps.forEach(([x,y])=>{pc.fillStyle="#d6336c";pc.fillRect(x,y,1,1)});
+  const v=vec(f);hv=DIG.map(d=>Math.min(...PROT[d].map(p=>dist(v,p))));
+  $("#ft").textContent=`huecos: ${f.h}\nsimetría V: ${f.sv.toFixed(2)}  H: ${f.sh.toFixed(2)}\nextremos: ${f.e}\ndensidad 3×3: ${f.d.map(x=>x.toFixed(2)).join(" ")}`}
+ else $("#ft").textContent="Imagen sin trazo suficiente.";
+ last=search($("#m").value,hv,tau);last.hv=hv;
+ DIG.forEach(d=>svg.querySelector(`.nd[data-i="${d}"] .hv`).textContent=hv[d]<9?"h="+hv[d].toFixed(2):"");
+ play();return last.res}
+$("#f").onchange=e=>{const fl=e.target.files[0];if(!fl)return;const im=new Image();
+ im.onload=()=>{const c=document.createElement("canvas");c.width=c.height=N;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,N,N);x.drawImage(im,0,0,N,N);analyze(grayOf(c))};
+ im.src=URL.createObjectURL(fl)};
+$("#rp").onclick=()=>last&&play();
+$("#tau").oninput=e=>$("#tv").textContent=e.target.value;
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function tests(){
+ const r=rng(Date.now()%100000),F=["Arial","Georgia","Verdana","Times New Roman","Courier New","Trebuchet MS"],S=[];
+ for(let i=0;i<25;i++){const d=i%10;S.push({exp:d,c:render(d,F[(r()*6)|0],r()<.5,(r()-.5)*20,(r()-.5)*4,(r()-.5)*4,.85+r()*.25)})}
+ const nz=document.createElement("canvas");nz.width=nz.height=N;const x=nz.getContext("2d");
+ for(let i=0;i<N*N;i++){x.fillStyle=r()<.45?"#000":"#fff";x.fillRect(i%N,i/N|0,1,1)}
+ S.push({exp:null,c:render(null)},{exp:null,c:nz});return S}
+function runTests(){
+ const S=tests(),gr=$("#grid");gr.innerHTML="";let ok=0;const keep=$("#tau").value;
+ S.forEach(s=>{const gray=grayOf(s.c),b=norm(binarize(gray));let res=null;
+  if(b.reduce((a,v)=>a+v,0)>=12){const v=vec(feats(b)),hv=DIG.map(d=>Math.min(...PROT[d].map(p=>dist(v,p)))),r=search($("#m").value,hv,+$("#tau").value);res=r.res}
+  const good=res===s.exp;if(good&&s.exp!==null)ok++;
+  const t=document.createElement("div");t.className="t "+(good?"ok":"bad");t.title="Ver recorrido";
+  t.appendChild(s.c);t.insertAdjacentHTML("beforeend",`<div>${s.exp===null?"null":s.exp} → ${res===null?"null":res}</div>`);
+  s.ok=good;t.onclick=()=>{analyze(gray);scrollTo({top:$("#res").offsetTop-80,behavior:"smooth"})};gr.appendChild(t)});
+ const okAll=S.filter(s=>s.ok).length;
+ $("#acc").textContent=`Dígitos 0-9: ${ok}/25 (${(ok*4)}%) · con los 2 casos null: ${okAll}/27`}
+$("#rt").onclick=runTests;$("#m").onchange=runTests;$("#tau").onchange=runTests;
+runTests();
+</script></body></html>
